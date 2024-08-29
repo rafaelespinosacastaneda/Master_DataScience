@@ -1,0 +1,267 @@
+---
+title: "Hw6"
+output: pdf_document
+author: "Rafael Espinosa Castaneda"
+date: "2023-03-06"
+---
+
+
+```{r setup, include=TRUE,message=FALSE,warning=FALSE}
+# --------------------------Setting the parameters to be used------------------------
+## load libraries
+library(ggplot2)
+library(gridExtra)
+library(sf)
+library(sp)
+library(spdep)
+library(spatialreg)
+load("/Users/rafa/Documents/Master Austin/MAESTRIA_AUSTIN/Advanced Predictive Models/Hw6/Hw6Part1.RData")
+
+
+```
+
+## Part a
+
+```{r parta, include=TRUE,message=FALSE,warning=FALSE}
+# scatterplot of avg_logPOS vs. logPOS
+ggplot(data=crime_dat,
+       aes(x = poverty, y = crime)) +
+  geom_point() +
+  stat_smooth(method = "lm") +
+  xlab("Percentage of the population below the poverty line") +
+  ylab("Counts of violent crimes ")+
+  labs(title="NNCS counts of violent crimes per 1,000 individuals in year 2000 vs 
+       Percentage of the population below the poverty line")
+
+
+```
+
+
+
+## Part b
+
+$$\textbf{ANSWER}$$
+
+We cannot make a conclusion from aggregate data to individuals.
+
+## Part c
+```{r partc, include=TRUE,message=FALSE,warning=FALSE}
+
+
+crime_dat$logCrime <- log(crime_dat$crime)
+crime_dat$logPoverty <- log(crime_dat$poverty)
+
+
+
+
+
+ggplot(data = crime_dat) +  
+  geom_sf(aes(fill = logCrime))+
+  labs(title="Log Crime")
+
+
+#-------
+
+
+# map of the log Poverty 
+
+
+ggplot(data = crime_dat) +  
+  geom_sf(aes(fill = poverty))+
+  labs(title=" Poverty")
+
+```
+
+
+
+
+
+
+
+## Part d
+
+```{r partd, include=TRUE,message=FALSE,warning=FALSE}
+# Construct neighborhood list
+nb <- poly2nb(crime_dat) 
+
+
+  
+
+# -> plot
+nb_lines <- nb %>%
+  nb2lines(coords = coordinates(as(crime_dat, "Spatial"))) %>%
+  as("sf") %>%
+  st_set_crs(st_crs(crime_dat))
+
+ggplot(data = crime_dat) +
+  geom_sf(fill = "white", color = "lightgrey") + 
+  geom_sf(data = nb_lines, col = "red") +
+  labs(title = "Adjacent Census Tracts")
+
+```
+
+
+
+## Part e
+
+```{r parte, include=TRUE,message=FALSE,warning=FALSE}
+
+summary(nb)
+
+crime_dat
+coordinates_centroids<-coordinates(as(crime_dat, "Spatial"))
+
+print("One census tract have no neighbors, i.e. one island")
+print(paste("coordinates",-82.93626, 39.81671))
+
+```
+
+$$\textbf{ANSWER}$$
+
+One census tract have no neighbors, i.e. one island.
+
+coordinates of the island (-82.93626, 39.81671)
+
+\newpage
+
+
+## ------------------------ Second Homework-----------------
+
+
+## Part f
+
+```{r partf, include=TRUE,message=FALSE,warning=FALSE}
+
+
+crime_dat2<-crime_dat[-195,]
+crime_filtered<-crime_dat2[crime_dat2$crime!=0,]
+
+nb_filtered <- poly2nb(crime_filtered) 
+
+
+
+
+# construct binary adjacency matrix
+W_mat <- nb2listw(nb_filtered, 
+                  style = 'B', 
+                  zero.policy = T) 
+
+crime_filtered$log_Crime <- log(crime_filtered$crime)
+
+# SMA Model
+
+fit_SMA <- spautolm(log_Crime ~ poverty,
+                    listw = W_mat,
+                    family = "SMA",
+                    data = crime_filtered)
+summary(fit_SMA)
+
+
+print(paste("The intercept: " ,signif(1.999317 ,3)," with standard error",signif(0.118105,3)))
+
+
+print(paste("The poverty coefficient: " ,signif(0.045886,3)," with standard error",signif(0.004671,3)))
+
+
+
+print("A positive  change in poverty rate is statistically significantly associated with a positive small change in crime rate after adjusting for the spatial structure of crime rate in the city")
+
+```
+$$\textbf{ANSWER}$$
+```{r partf_answer, echo=FALSE,message=FALSE,warning=FALSE}
+print(paste("The intercept: " ,signif(1.999317 ,3)," with standard error",signif(0.118105,3)))
+
+
+print(paste("The poverty coefficient: " ,signif(0.045886,3)," with standard error",signif(0.004671,3)))
+
+```
+
+A positive  change in poverty rate is statistically significantly associated with a positive small change in crime rate after adjusting for the spatial structure of crime rate in the city
+
+
+
+## Part g
+
+```{r partg, include=TRUE,message=FALSE,warning=FALSE}
+
+
+# non-spatial linear model
+fit_ns <- lm(log_Crime ~ poverty,
+             data = crime_filtered)
+
+summary(fit_ns)
+
+
+```
+$$\textbf{ANSWER}$$
+
+```{r answer_partg, echo=FALSE,message=FALSE,warning=FALSE}
+
+print("Without three significant figures")
+print(paste("The intercept: " ,1.918417,3," with standard error",0.094889))
+
+
+print(paste("The poverty coefficient: " ,0.057356," with standard error",0.004466))
+
+print(paste("Non spatial AIC:",AIC(fit_ns)))
+print(paste("SMA AIC : ",AIC(fit_SMA)))
+
+
+print("---------------With three significant figures------")
+print(paste("The intercept: " ,signif(1.918417,3)," with standard error",signif(0.094889,3)))
+
+
+print(paste("The poverty coefficient: " ,signif(0.057356,3)," with standard error",signif(0.004466,3)))
+
+print(paste("Non spatial AIC:",signif(AIC(fit_ns))))
+print(paste("SMA AIC : ",signif(AIC(fit_SMA))))
+```
+
+-The non-spatial model coefficient predicts a greater change in crime rate due to change in poverty rate than the SMA model.
+
+-The model that better fits the data is the spatial moving average model (SMA)
+
+## Part h
+
+```{r parth, include=TRUE,message=FALSE,warning=FALSE}
+
+coord_stadium<-c(-83.019707, 40.001633)
+
+
+st_stadium<-st_point(coord_stadium)
+r_within<-st_contains(st_stadium,crime_dat)
+
+
+
+
+
+ggplot(data = crime_dat) +
+  geom_sf(fill = "white", color = "lightgrey") + 
+  geom_point(aes(x=coord_stadium[1],y=coord_stadium[2]),color="red") 
+
+```
+
+## Part i
+
+
+```{r parti, include=TRUE,message=FALSE,warning=FALSE}
+
+
+crime_filtered$pred_ns <- fit_ns$fitted.values
+crime_filtered$pred_sma <- fit_SMA$fit$fitted.values
+
+
+crime_filtered
+
+
+```
+$$\textbf{ANSWER}$$
+
+
+```{r parti_answer, echo=FALSE,message=FALSE,warning=FALSE}
+
+print(paste("Prediction of log crime NS",round(2.873048,3)))
+print(paste("Prediction of log crime SMA: ",round(3.1450651,3)))
+print(paste("Observed log crime", round(3.6023620,3)))
+```
+We can notice that the prediction of the SMA model is closer to the actual log crime value than the non spatial model.
