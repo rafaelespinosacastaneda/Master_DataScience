@@ -1,0 +1,257 @@
+---
+title: "Homework 3 Part1"
+author: "Rafael Espinosa Castaneda"
+output: pdf_document
+date: "2023-02-12"
+---
+
+## Question a
+```{r setup, include=TRUE,message=FALSE,warning=FALSE}
+
+# load libraries
+library(tidyverse)
+library(gridExtra)
+library(xts)
+library(depmixS4)
+library(gamlss.data)
+
+
+
+
+#----------------------- Question a -------------------
+data(polio)
+
+months<-seq(as.Date("1970-01-01"), as.Date("1983-12-01"), by="months")
+
+
+data_complete<-data.frame("Count"=polio,"Time"=months)
+
+###################################################
+# Fit a 2-state Poisson HMM to the earthquake data from
+# "Hidden Markov Models for Time Series" by 
+# Zucchini, MacDonald, and Langrock (2016)
+
+
+#eq_dat <- data.frame("count" = quakes,"year" = year)
+
+# create the HMM (non-stationary)
+polio_mod <- depmix(Count ~ 1,
+                  data = data_complete,
+                  family = poisson(),
+                  nstates = 2,
+                  ntimes = length(months))
+
+# fit the model using an EM algorithm
+polio_fit <- fit(polio_mod)
+
+
+
+
+# get the posterior distribution of the states
+data_complete$states <- posterior(polio_fit, type = "viterbi")$state 
+
+
+# plot the earthquake data with the most likely state
+
+ggplot(data_complete,
+       aes(x = Time, y = Count)) +
+  geom_point(size = .7, color = "darkblue") +
+  geom_line(color = "darkblue")  +
+  geom_text(label=data_complete$states,nudge_y =0.45)+
+  ggtitle("Polio cases over time") 
+
+```
+
+$$\textbf{NUMERICAL VALUES-ANSWER}$$
+
+```{r answer_a, echo=FALSE,message=FALSE,warning=FALSE}
+
+print("The AIC is")
+AIC(polio_fit)
+
+print("The estimated lambda values are")
+exp(getpars(polio_fit)[7:8])
+
+print("The transition matrix values are")
+
+print(paste(" From State 1 to State 1 ",getpars(polio_fit)[3]))
+print(paste(" From State 1 to State 2 ",getpars(polio_fit)[4]))
+print(paste(" From State 2 to State 1 ",getpars(polio_fit)[5]))
+print(paste(" From State 2 to State 2 ",getpars(polio_fit)[6]))
+
+
+
+
+
+# get the posterior distribution of the states
+data_complete$states <- posterior(polio_fit, type = "viterbi")$state 
+
+```
+
+
+# -------------------------------------------------------------------------
+
+## Part b
+
+
+
+```{r questionb, include=TRUE,echo=TRUE,message=FALSE,warning=FALSE}
+#----------------------- Question b -------------------
+
+count_1<-0
+count_2<-0
+
+count_g4<-0
+
+for (i in 1:length(data_complete$Count))
+{
+  
+  if(data_complete$Count[i]>=4)
+  {
+    count_g4<-count_g4+1
+  }
+  
+  
+  if (data_complete$states[i]==1 && data_complete$Count[i]>=4)
+  {
+    count_1<-count_1+1
+  }
+  
+  if (data_complete$states[i]==2 &&data_complete$Count[i]>=4)
+  {
+    count_2<-count_2+1
+  }
+}
+
+print(paste("P(C_t=1|X_t>=4)=",count_1/(count_g4)))
+
+print(paste("P(C_t=2|X_t>=4)=",count_2/(count_g4)))
+
+
+two_cases_prob<-1-ppois(2, lambda = exp(getpars(polio_fit)[8]))
+zero_cases_prob<-dpois(2, lambda = exp(getpars(polio_fit)[8]))
+
+print(paste("Two cases probability at time t+1",two_cases_prob))
+
+print(paste("Zero cases probability at time t+1",zero_cases_prob))
+
+```
+\newpage
+
+$$\textbf{ANSWER}$$
+
+1. The $\lambda 's$ represent the mean number of cases of people with polio per month for each state.
+2. The steps to solve this question was to calculate the probability to be in state 1 or 2 given that the observed people with disease was greater or equal to 4. Then, once we know the state at time t, we use the transition matrix to know to what state is more probable to be at time t+1. Finally, once we know the state at time t+1, we calculate the probabilities to observe 0 patients with polio and to observe at least two patients with polio. What I obtained was that It is more probable to be in state 2 at time t given that number of observed patients with polio is greater or equal to 4. From this, I used the transition matrix. From the transition matrix I got that is much more probable to stay in state 2 than going to state 1 for time t+1. Hence, $C_{t+1}=2$. Finally, I calculated the probabilities o f zero patients at time t+1 and at least 2 patients at tiume t+1 given that $C_{t+1}=2$.
+
+
+
+
+
+The conclusion obtained was that : 
+It is more likely to observe 2 or more cases at time  t+1 given that at time t we observed at least 4
+
+3. The model is consistent with basic knowledge of diasease dynamics. If this month we observed
+more than four infected people, it is likely that those four will spread the disease to other people or
+keep infected at least for another month. Hence, it is more probable that we observe  at least two cases
+with the desease than no observing it
+
+# -------------------------------------------------------------------------
+
+## Part c
+
+
+
+
+
+```{r question_c, include=TRUE,message=FALSE,warning=FALSE}
+
+
+#----------------------- Question c -------------------
+
+
+months<-seq(as.Date("1970-01-01"), as.Date("1983-12-01"), by="months")
+
+
+data_complete<-data.frame("Count"=polio,"Time"=months)
+###################################################
+# Fit a 3-state Poisson HMM to the earthquake data from
+# "Hidden Markov Models for Time Series" by 
+# Zucchini, MacDonald, and Langrock (2016)
+
+
+
+# create the HMM (non-stationary)
+polio_mod2 <- depmix(Count ~ 1,
+                    data = data_complete,
+                    family = poisson(),
+                    nstates = 3,
+                    ntimes = length(months))
+
+# fit the model using an EM algorithm
+aic_pol3<-600
+for (i in 1:100000)
+{
+  
+  if(aic_pol3>531)
+  {polio_fit2 <- fit(polio_mod2)
+    aic_pol3<-AIC(polio_fit2)
+  }
+  else
+    
+  {
+    break 
+  }
+}
+
+
+
+
+
+# get the posterior distribution of the states
+data_complete$states2 <- posterior(polio_fit2, type = "viterbi")$state 
+
+
+# plot the polio data with the most likely state
+
+ggplot(data_complete,
+       aes(x = Time, y = Count)) +
+  geom_point(size = .7, color = "darkblue") +
+  geom_line(color = "darkblue")  +
+  geom_text(label=data_complete$states2,nudge_y =0.45)+
+  ggtitle("Polio cases over time") 
+
+
+
+```
+
+
+
+$$\textbf{NUMERICAL VALUE-ANSWER}$$
+
+
+```{r answer_c, echo=FALSE,message=FALSE,warning=FALSE}
+
+
+print("The AIC is")
+AIC(polio_fit2)
+
+
+
+print("The parameters lambda values are")
+exp(getpars(polio_fit2)[13:15])
+
+
+
+print("The transition matrix values are")
+
+print(paste(" From State 1 to State 1 ",getpars(polio_fit2)[4]))
+print(paste(" From State 1 to State 2 ",getpars(polio_fit2)[5]))
+print(paste(" From State 1 to State 3 ",getpars(polio_fit2)[6]))
+print(paste(" From State 2 to State 1 ",getpars(polio_fit2)[7]))
+print(paste(" From State 2 to State 2 ",getpars(polio_fit2)[8]))
+print(paste(" From State 2 to State 3 ",getpars(polio_fit2)[9]))
+print(paste(" From State 3 to State 1 ",getpars(polio_fit2)[10]))
+print(paste(" From State 3 to State 2 ",getpars(polio_fit2)[11]))
+print(paste(" From State 3 to State 3 ",getpars(polio_fit2)[12]))
+
+```
