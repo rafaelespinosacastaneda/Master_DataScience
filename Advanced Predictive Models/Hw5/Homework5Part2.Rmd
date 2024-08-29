@@ -1,0 +1,309 @@
+---
+title: "Homework5Part1" 
+output: pdf_document
+author: "Rafael Espinosa Castaneda"
+date: "2023-02-18"
+---
+
+```{r setup, include=TRUE,message=FALSE,warning=FALSE}
+# --------------------------Setting the parameters to be used------------------------
+###################################################
+## COMPUTING DEMO:  Kriging
+##
+## DSC 383: Advanced Predictive Models for Complex Data
+## By:  Kate Calder, UT Austin
+## Last updated: September 26, 2021
+###################################################
+
+## load libraries
+library(ggplot2)
+library(mapproj)
+library(geoR)
+library(leaflet)
+library(gridExtra)
+library(measurements)
+library(dplyr)
+
+
+# load scallops data
+rain <- read.table("/Users/rafa/Documents/Master Austin/MAESTRIA_AUSTIN/Advanced Predictive Models/Hw5/rain.txt",header=T)
+
+rain$altitude<-conv_unit(rain$altitude, "ft", "mi") 
+
+
+
+
+```
+
+## Part a
+
+```{r parta, include=TRUE,message=FALSE,warning=FALSE}
+
+# create geodata (geoR) object
+rain_geo_altitude <- as.geodata(
+  cbind(rain$altitude, 
+        rain$x, 
+        rain$y), 
+  data.col = 1, 
+  coords.col = 2:3)
+
+
+
+# create geodata (geoR) object
+rain_geo_rainfall <- as.geodata(
+  cbind(rain$rainfall, 
+        rain$x, 
+        rain$y), 
+  data.col = 1, 
+  coords.col = 2:3)
+
+
+par(mfrow=c(1,2))
+
+points.geodata(rain_geo_rainfall, col = gray(seq(1, 0.1, l = 100)),xlab = "x", ylab = "y")
+title("Spatial variation in rainfall ")
+
+points.geodata(rain_geo_altitude, col = gray(seq(1, 0.1, l = 100)),xlab = "x", ylab = "y")
+title("Spatial variation in altitude ")
+
+```
+$$\textbf{ANSWER}$$
+
+We can notice certain spatial dependence for the altitude. We can notice from the plot that in general the altitude is greater for coordinates $x>=100$ and $y<150$. For the rainfall variable we can notice a certain dependece such that greater values are around the center of the 2D coordinates.
+
+
+
+## Part b
+
+```{r partb, include=TRUE,message=FALSE,warning=FALSE}
+lR_RA = lm(sqrt(rainfall)~altitude, data = rain) 
+
+summary(lR_RA)
+
+print("The estimated error variance")
+print(4.275^2)
+
+print("The proportion of variance is ")
+
+print(0.03145)
+
+```
+
+$$\textbf{ANSWER}$$
+
+The equation is  $\sqrt{rainfall}=14.1273-8.3681*Altitude$. The estimated error variance is $18.27563$ and the proportion of variation in the square root of rainfall is explained by altitude is
+$0.03145$
+
+
+## Part c
+
+
+```{r partc, include=TRUE,message=FALSE,warning=FALSE}
+
+N<-length(rain$rainfall)
+#tot<-N*(N-1)
+
+tot<-N*(N-1)/2
+print(N)
+print(tot)
+distances<-rep(1,tot)
+count<-0
+for (i in 1:N)
+     {
+       for(j in (i+1):N)
+       {
+         if (i!=j)
+         {
+           count<-count+1
+         distances[count]<- ( (rain$x[i]-rain$x[j])^2 +(rain$y[i]-rain$y[j])^2 )^(1/2)
+         
+         if (is.na(distances[count]))
+         {
+           print(paste("i",i,"j",j))
+           print("The x_i")
+           print(rain$x[i])
+           print("The x_j")
+           print(rain$x[j])
+           print("The y_i")
+           print(rain$y[i])
+           print("The y_j")
+           print(rain$y[j])
+         }
+         
+         
+         
+         }
+         
+        }
+       
+     }
+hist(distances, breaks=seq(from=0, to=300, by=20),freq=FALSE,xlab="Distances",ylab="Relative Frequency")
+
+```
+
+## Part d
+
+```{r partd, include=TRUE,message=FALSE,warning=FALSE}
+
+residuals<-resid(lR_RA)
+
+bins_ranges<-c(20,40,60,80,100,120,140,160,180,200,220,240,260,280,300)
+
+
+
+
+
+
+df1 <- data.frame(x_1=c(rain$x[1]),
+                  x_2=c(rain$x[2]),distance=c( ( (rain$x[1]-rain$x[2])^2 +(rain$y[1]-rain$y[2])^2 )^(1/2) ) , res1=c (residuals[1]), res2=c (residuals[2]))
+
+
+for (i in 1:N)
+  {
+  for(j in (i+1):N)
+    {
+    if (i!=j && (i!=1 && j!=2)  )
+      {
+      count<-count+1
+      distances[count]<- ( (rain$x[i]-rain$x[j])^2 +(rain$y[i]-rain$y[j])^2 )^(1/2)
+      
+      
+          df2 <- data.frame(x_1=c(rain$x[i]),
+                            x_2=c(rain$x[j]),distance=c( ( (rain$x[i]-rain$x[j])^2 +(rain$y[i]-rain$y[j])^2 )^(1/2) ) , res1=c (residuals[i]), res2=c (residuals[j]))
+          
+          df1<-bind_rows(df1, df2)
+          
+      }
+    
+  }
+
+  
+  }
+
+
+correlation<- rep(0,length(bins_ranges))
+counters_dist<- rep(0,length(bins_ranges))
+
+count<-1
+
+for (bin in bins_ranges)
+{
+  df_to_use<-filter(df1, distance<bin & distance>=bin-20 & x_1 !=x_2)
+  counters_dist[count]<-length(df_to_use$x_1)
+  correlation[count]<-cor(df_to_use$res1,df_to_use$res2)
+  count<-count+1
+}
+
+
+df_to_use
+
+centers<-c(10,30,50,70,90,110,130,150,170,190,210,230,250,270,290)
+
+
+
+df2<-data.frame(centerBins=centers,corr=correlation,num_dist=counters_dist)
+
+
+counters_dist
+as_geo_corr <- as.geodata(
+  cbind(counters_dist, 
+        centers, 
+        correlation), 
+  data.col = 1, 
+  coords.col = 2:3)
+
+#points.geodata(as_geo_corr,xlab = "center bins", ylab = "correlation")
+
+
+ggplot() + geom_point(data = df2, aes(x =centerBins , y = corr),cex=10*(counters_dist+min(counters_dist))/max(counters_dist)+2.5)+labs(x = "Distance",y = "Correlation")
+
+
+
+```
+
+## Part e
+$$\textbf{ANSWER}$$
+
+In Switzerland, a small country it shouldn't be very likely to have pair of locations extremely far one from the other. That's why it is much more likely a distance between 80 and 100 than distances greater than 280.  
+
+
+
+\newpage
+
+Rafael Espinosa Castaneda
+
+$$PART 2$$
+
+## Part f 
+```{r partf, include=TRUE,message=FALSE,warning=FALSE}
+
+rain_geo_rainfall2 <- as.geodata(
+  cbind(sqrt(rain$rainfall), 
+        rain$x, 
+        rain$y,rain$altitude), 
+  data.col = 1, 
+  coords.col = 2:3,covar.col=4)
+
+rain_geo_rainfall2
+
+fit_spatial <- likfit(
+  rain_geo_rainfall2,
+  trend =~covar1 ,
+  cov.model = "exponential",
+  ini.cov.pars = c(5, .01),
+  fix.nugget=TRUE, 
+  nugget=0.0,nospatial=FALSE)
+
+fit_NO_spatial <- likfit(
+  rain_geo_rainfall2,
+  trend =~covar1 ,
+  cov.model = "exponential",
+  ini.cov.pars = c(5, .01),
+  fix.nugget=TRUE, 
+  nugget=0.0,nospatial=TRUE)
+
+
+summary(fit_spatial)
+
+summary(fit_NO_spatial)
+```
+
+$$\textbf{ANSWER}$$
+We have that $\beta_0=11.5970$ , $\beta_1=0.0288$  and $\sigma^2 = 20.97$ , $\phi=42.41$
+
+## Part g
+
+```{r partg, include=TRUE,message=FALSE,warning=FALSE}
+
+corr_func<-exp((-1/42.41)*c(10,30,50,70,90,110,130,150,170,190,210,230,250,270,290))
+df3<-data.frame(centerBins=centers,corr=corr_func)
+
+
+ggplot() + geom_point(data = df2, aes(x =centerBins , y = corr),cex=10*(counters_dist+min(counters_dist))/max(counters_dist)+2.5)+
+  labs(x = "Center of distance bins",y = "Correlation")+ geom_point(data = df3, aes(x =centerBins , y = corr),color='blue')
+
+
+```
+
+## Part h
+
+```{r parth, include=TRUE,message=FALSE,warning=FALSE}
+
+summary(fit_spatial)
+summary(fit_NO_spatial)
+```
+$$\textbf{ANSWER}$$
+
+Non spatial AIC = 578.3.  
+
+Spatial AIC =503.5
+
+
+Therefore, the spatial model  better fits the data
+
+
+
+## Part i
+$$\textbf{ANSWER}$$
+
+We need the convex hull of the set of data points to generate the grid for prediction locations.
